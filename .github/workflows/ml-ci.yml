@@ -1,0 +1,128 @@
+name: Placement ML CI-CD
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+
+
+jobs:
+
+  train-test-deliver:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =========================
+      # Checkout repository
+      # =========================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # =========================
+      # Setup Python
+      # =========================
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # =========================
+      # Upgrade pip
+      # =========================
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+
+      # =========================
+      # Install dependencies
+      # =========================
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+
+      # =========================
+      # Train ML model
+      # =========================
+
+      - name: Train placement model
+        run: python train_model.py
+
+
+      # =========================
+      # ML quality gate
+      # =========================
+
+      - name: Check ML quality gate
+        run: python quality_gate.py
+
+
+      # =========================
+      # ML tests
+      # =========================
+
+      - name: Run automated ML tests
+        run: python -m unittest test_ml_pipeline.py -v
+
+
+      # =========================
+      # Flask API tests
+      # =========================
+
+      - name: Run prediction application tests
+        run: python -m unittest test_app.py -v
+
+
+      # =========================
+      # Prepare release candidate
+      # =========================
+
+      - name: Prepare release candidate
+        run: |
+
+          mkdir -p release_candidate
+
+          cp app.py release_candidate/
+
+          cp placement_model.pkl release_candidate/
+
+          cp metrics.json release_candidate/
+
+          cp requirements.txt release_candidate/
+
+          printf "Placement Prediction ML Application\nRun: python app.py\nHealth: GET /\nPrediction: POST /predict\n" > release_candidate/DEPLOYMENT.txt
+
+
+      # =========================
+      # Upload release candidate
+      # =========================
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: student-placement-ml-release
+
+          path: release_candidate/
+
+          if-no-files-found: error
+
+          retention-days: 7
